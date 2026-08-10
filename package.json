@@ -1,0 +1,1 @@
+{"name":"hmel-wms","private":true,"type":"module","scripts":{"test":"node tests/static-check.mjs && node --check frontend/js/api.js && node --check frontend/js/ui.js && node --check frontend/js/app.js"}}
