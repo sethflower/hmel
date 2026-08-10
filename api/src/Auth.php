@@ -1,0 +1,10 @@
+<?php
+declare(strict_types=1); namespace Wms;
+final class Auth {
+ public function __construct(private Database $db,private Audit $audit,private array $config){}
+ public function login(array $p):array{$login=strtolower(Util::text($p['login']??''));$u=$this->db->one('SELECT * FROM users WHERE login=? AND deleted_at IS NULL',[$login]);if(!$u||!$u['active']||!password_verify((string)($p['password']??''),$u['password_hash']))throw new ApiException('AUTH','Неверный логин или пароль',401);$token=bin2hex(random_bytes(32));$expires=date('Y-m-d H:i:s',time()+86400*(int)($this->config['session_days']??365));$this->db->transaction(function()use($u,$token,$expires){$this->db->exec('UPDATE users SET last_login=?,version=version+1 WHERE id=?',[Util::now(),$u['id']]);$this->db->exec('INSERT INTO sessions(id,user_id,token_hash,created_at,expires_at) VALUES(?,?,?,?,?)',[Util::uuid(),$u['id'],hash('sha256',$token),Util::now(),$expires]);});$user=$this->public($u);$this->audit->log($user,'LOGIN','auth',$u['id']);return['token'=>$token,'expiresAt'=>$expires,'user'=>$user];}
+ public function user(?string $token):array{if(!$token)throw new ApiException('AUTH','Требуется вход в систему',401);$u=$this->db->one('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>NOW() AND u.active=1 AND u.deleted_at IS NULL',[hash('sha256',$token)]);if(!$u)throw new ApiException('AUTH','Сессия недействительна. Войдите снова.',401);return$this->public($u);}
+ public function logout(?string $token):array{if($token)$this->db->exec('UPDATE sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL',[Util::now(),hash('sha256',$token)]);return[];}
+ public function requireAdmin(array $u):void{if($u['role']!=='admin')throw new ApiException('FORBIDDEN','Недостаточно прав',403);}
+ public function public(array $u):array{return['id'=>$u['id'],'login'=>$u['login'],'displayName'=>$u['display_name']??$u['displayName'],'role'=>$u['role'],'active'=>(bool)$u['active'],'createdAt'=>$u['created_at']??null,'lastLogin'=>$u['last_login']??null,'version'=>(int)($u['version']??1)];}
+}
