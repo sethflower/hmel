@@ -1,0 +1,6 @@
+<?php
+declare(strict_types=1);
+require dirname(__DIR__).'/src/bootstrap.php';
+use Wms\{ApiException,Database,Router};
+$origin=$_SERVER['HTTP_ORIGIN']??'';$allowed=$config['app']['allowed_origins']??[];if($origin&&in_array($origin,$allowed,true)){header('Access-Control-Allow-Origin: '.$origin);header('Vary: Origin');}header('Access-Control-Allow-Headers: Content-Type');header('Access-Control-Allow-Methods: POST, GET, OPTIONS');header('Content-Type: application/json; charset=utf-8');if(($_SERVER['REQUEST_METHOD']??'')==='OPTIONS'){http_response_code(204);exit;}
+try{$raw=file_get_contents('php://input');$request=($_SERVER['REQUEST_METHOD']??'GET')==='GET'?$_GET:(json_decode($raw,true,512,JSON_THROW_ON_ERROR));$result=(new Router(new Database($config['db']),$config))->run($request);echo json_encode(['success'=>true,'data'=>$result,'error'=>null],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);}catch(ApiException$e){http_response_code($e->httpStatus);echo json_encode(['success'=>false,'data'=>null,'error'=>['code'=>$e->errorCode,'message'=>$e->getMessage()]],JSON_UNESCAPED_UNICODE);}catch(Throwable$e){error_log($e->__toString());http_response_code(500);echo json_encode(['success'=>false,'data'=>null,'error'=>['code'=>'SERVER_ERROR','message'=>'Не удалось выполнить операцию. Повторите позже.']],JSON_UNESCAPED_UNICODE);}
